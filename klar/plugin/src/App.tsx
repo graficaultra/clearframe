@@ -118,7 +118,7 @@ function Login() {
 
 function DotsIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
       <circle cx="3.5" cy="8" r="1.4" />
       <circle cx="8" cy="8" r="1.4" />
       <circle cx="12.5" cy="8" r="1.4" />
@@ -129,8 +129,8 @@ function DotsIcon() {
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg
-      width="10"
-      height="10"
+      width="12"
+      height="12"
       viewBox="0 0 12 12"
       fill="none"
       style={{
@@ -152,18 +152,18 @@ function ChevronIcon({ open }: { open: boolean }) {
 
 function SidebarIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-      <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
-      <line x1="6" y1="2.5" x2="6" y2="13.5" stroke="currentColor" strokeWidth="1.3" />
+    <svg width="24" height="20" viewBox="0 0 24 20" fill="none">
+      <rect x="1.5" y="1.5" width="21" height="17" rx="3" stroke="currentColor" strokeWidth="1.4" />
+      <line x1="9" y1="1.5" x2="9" y2="18.5" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }
 
 function SearchIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-      <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.4" />
-      <line x1="10.8" y1="10.8" x2="14" y2="14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <svg width="19" height="19" viewBox="0 0 19 19" fill="none">
+      <circle cx="8.5" cy="8.5" r="6" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="13" y1="13" x2="17" y2="17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
@@ -734,13 +734,16 @@ function TaskBoard({
             + Add board
           </button>
         ) : (
-          <input
-            className="add-task-field"
-            placeholder="Add task"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTask()}
-          />
+          <div className="add-task-field-wrap">
+            <input
+              className="add-task-field"
+              placeholder="Add task"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addTask()}
+            />
+            <span className="add-task-plus" aria-hidden="true">+</span>
+          </div>
         )}
         <AssigneeSwitcher
           workspace={workspace}
