@@ -1,7 +1,11 @@
-/* klar plugin — pixel-matched to the Figma "Board" spec (node 24:119).
-   Fixed dark theme, hard-coded to the design's exact values rather than
-   Framer's own light/dark tokens — the product has one look regardless of
-   the Framer user's panel theme, per design. */
+/* klar plugin — fixed dark theme matching the Figma spec exactly
+   (colors, radii, pill shapes), sized down proportionally to fit
+   Framer's narrow plugin panel. The interaction language stays iOS:
+   text-style buttons sized to their content, row separators instead of
+   filled backgrounds, and a single overflow (•••) menu per row instead
+   of stacked buttons — everything except color now routes through
+   these fixed tokens instead of Framer's own theme, since the product
+   has one look (dark) regardless of the Framer user's panel theme. */
 
 :root {
   --klar-bg: #0f0f0f;
@@ -19,7 +23,6 @@
 
 body {
   font-size: 13px;
-  font-family: -apple-system, "SF Pro Text", "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
   color: var(--klar-text);
   background: var(--klar-bg);
   user-select: none;
@@ -29,10 +32,7 @@ body {
 #root { height: 100vh; display: flex; flex-direction: column; position: relative; }
 
 /* ---------------------------------------------------------------------- */
-/* Shell: sidebar + main. Figma's reference frame runs the sidebar at 363px
-   and the top bar at 102px tall — the plugin keeps those exact figures;
-   only the kanban columns get scaled down since the panel is narrower
-   than Figma's 1512px canvas (see .column below). */
+/* Shell: sidebar + main, Framer-panel style */
 
 .shell-root {
   display: flex;
@@ -40,8 +40,13 @@ body {
   overflow: hidden;
 }
 
+/* Sidebar sizing follows the Figma spec (363px reference frame) scaled down
+   proportionally for the plugin's narrower default panel width — spacing
+   ratios preserved, absolute px reduced. Colors are the fixed dark palette
+   above, matching Figma exactly regardless of the Framer user's theme. */
+
 .sidebar {
-  width: 363px;
+  width: 220px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -49,90 +54,93 @@ body {
   background: var(--klar-bg);
 }
 .sidebar-head {
-  height: 102px;
+  height: 52px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--klar-border);
 }
-.sidebar-head .title { font-size: 17px; font-weight: 400; color: var(--klar-text); }
+.sidebar-head .title { font-size: 13px; }
 
 .sidebar-search {
   flex-shrink: 0;
-  margin: 21px 21px 8px;
-  height: 52px;
+  margin: 12px 12px 4px;
+  height: 34px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 17px;
+  gap: 8px;
+  padding: 0 11px;
   border: 1px solid var(--klar-border);
-  border-radius: 12px;
-  color: var(--klar-text-secondary);
+  border-radius: 8px;
+  color: var(--klar-text-tertiary);
 }
 .sidebar-search svg { flex-shrink: 0; }
 .sidebar-search input {
   background: none;
   border: none;
   padding: 0;
-  font-size: 17px;
+  font-size: 12.5px;
   color: var(--klar-text);
 }
-.sidebar-search input::placeholder { color: var(--klar-text-secondary); }
+.sidebar-search input::placeholder { color: var(--klar-text-tertiary); }
 .sidebar-search input:focus-visible { box-shadow: none; }
 
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 21px;
+  padding: 8px 10px;
 }
 .sidebar-section-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 4px 12px;
+  padding: 6px 6px 10px;
 }
 .sidebar-section-label {
-  font-size: 17px;
-  font-weight: 590;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--klar-text);
+  text-align: left;
 }
 .sidebar-foot {
   flex-shrink: 0;
   border-top: 1px solid var(--klar-border);
-  padding: 16px 21px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 .sidebar-foot-label {
-  font-size: 17px;
-  font-weight: 590;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--klar-text);
-  padding: 8px 4px 6px;
+  text-align: left;
+  padding: 6px;
+  margin-bottom: 2px;
 }
 .side-foot-item {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 8px 4px;
-  border-radius: 6px;
-  font-size: 17px;
-  color: var(--klar-text-secondary);
+  padding: 6px;
+  font-size: 12.5px;
+  color: var(--klar-text-tertiary);
 }
-.side-foot-item:hover { background: var(--klar-panel); opacity: 1; color: var(--klar-text); }
+.side-foot-item:hover { opacity: 0.7; }
 
-/* Tree rows — selected item gets the rounded dark pill + bright text per
-   Figma; everything else stays dimmed until hovered. */
+/* Tree rows — plain text on transparent background for clients, always;
+   no pill or brightness change based on expand/collapse state. The one
+   exception is the selected workspace row, which gets Figma's dark pill
+   (.active) — and both that row and its parent client render in white
+   text via .raised, everything else stays grey. */
 .side-row {
   display: flex;
   align-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   padding-right: 4px;
-  min-height: 40px;
+  min-height: 30px;
 }
-.side-row:hover { background: var(--klar-panel); }
 .side-row.active { background: var(--klar-panel); }
 .side-row .overflow-btn { opacity: 0; }
 .side-row:hover .overflow-btn, .side-row.active .overflow-btn { opacity: 1; }
@@ -141,25 +149,25 @@ body {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   text-align: left;
-  padding: 8px;
-  font-size: 17px;
+  padding: 6px;
+  font-size: 12.5px;
   font-weight: 400;
-  color: var(--klar-text-secondary);
+  color: var(--klar-text-tertiary);
 }
-.side-row.active .side-row-main { color: var(--klar-text); font-weight: 400; }
-.side-row-main:hover { opacity: 1; }
-.side-children { margin-left: 12px; }
-.side-child-row { font-size: 17px; }
+.side-row-main .raised { color: var(--klar-text); }
+.side-row.active .side-row-main { color: var(--klar-text); }
+.side-row-main:hover { opacity: 0.85; }
+.side-children { margin-left: 0; }
 .side-child-row .side-row-main { padding-left: 20px; }
-input.side-child-row { margin: 2px 0 2px 20px; width: calc(100% - 24px); }
+input.side-child-row { margin: 1px 0; padding-left: 20px; width: 100%; }
 
 .side-add {
   display: block;
   text-align: left;
-  padding: 8px 4px;
-  font-size: 17px;
+  padding: 6px;
+  font-size: 12.5px;
   color: var(--klar-accent);
 }
 .side-add:hover { opacity: 0.7; }
@@ -169,7 +177,6 @@ input.side-child-row { margin: 2px 0 2px 20px; width: calc(100% - 24px); }
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--klar-bg);
 }
 
 .empty-state {
@@ -179,7 +186,6 @@ input.side-child-row { margin: 2px 0 2px 20px; width: calc(100% - 24px); }
   justify-content: center;
   padding: 24px;
   text-align: center;
-  color: var(--klar-text-secondary);
 }
 
 .login-screen {
@@ -188,8 +194,6 @@ input.side-child-row { margin: 2px 0 2px 20px; width: calc(100% - 24px); }
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--klar-bg);
-  color: var(--klar-text);
 }
 
 .col { display: flex; flex-direction: column; }
@@ -202,47 +206,47 @@ input.side-child-row { margin: 2px 0 2px 20px; width: calc(100% - 24px); }
 .scroll { overflow-y: auto; flex: 1; min-height: 0; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.title { font-weight: 400; font-size: 17px; letter-spacing: 0; color: var(--klar-text); }
-.muted { color: var(--klar-text-secondary); }
-.small { font-size: 12px; }
+.title { font-weight: 600; font-size: 13px; letter-spacing: -0.01em; }
+.muted { color: var(--klar-text-tertiary); }
+.small { font-size: 11px; }
 .label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--klar-text-secondary);
+  color: var(--klar-text-tertiary);
   text-transform: uppercase;
 }
-.err { color: var(--klar-danger); font-size: 13px; }
+.err { color: var(--klar-danger); font-size: 12px; }
 
 /* ---------------------------------------------------------------------- */
-/* Top bar — sidebar toggle, breadcrumb title, Edit board + Share pills.
-   102px tall to match the Figma nav bar exactly. Every trailing control
-   sizes to its content; only the breadcrumb truncates on narrow panels. */
+/* Top bar — like a navigation bar: leading control, centered/flex title,
+   trailing controls. Every child sizes to its content, never full width. */
 
 .bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 102px;
-  padding: 0 24px;
+  gap: 10px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--klar-border);
   flex-shrink: 0;
   min-width: 0;
-  background: var(--klar-bg);
 }
-.bar .title { flex: 1; min-width: 0; font-size: 17px; }
-.bar .title .muted { color: var(--klar-text-secondary); }
+/* Breadcrumb title is the only flexible/truncating element — every button
+   (toggle, Edit board, Share) keeps its natural size and never gets pushed
+   off-screen or behind a scrollbar, regardless of panel width. */
+.bar .title { flex: 1; min-width: 0; }
 .bar > button, .bar > .assignee-switcher { flex-shrink: 0; }
 .bar select.workspace-select { flex: 1; min-width: 0; }
 
 /* ---------------------------------------------------------------------- */
-/* Buttons. Default is a plain text button; .ghost/.pill/.primary give the
-   filled pill treatment Figma uses for "Edit board" (dark) and "Share"
-   (blue accent) in the top bar. */
+/* Buttons — iOS text-style by default: no fill, tinted text, sized to
+   content. A button never stretches to fill its row. Edit board / Share
+   are the two exceptions Figma calls out as filled pills — dark grey and
+   accent blue respectively — everything else stays a plain text button. */
 
 button {
   font: inherit;
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 400;
   border: none;
   background: none;
@@ -258,25 +262,22 @@ button:hover { opacity: 0.7; }
 button:active { opacity: 0.5; }
 button:disabled { opacity: 0.35; cursor: default; }
 
-/* Primary action — filled, pill-shaped, accent-blue. Figma's "Share". */
+/* Primary action — the one filled, pill-shaped, accent-blue button.
+   Used sparingly: one per screen, for the affirmative action (Share). */
 button.primary {
   background: var(--klar-accent);
   color: #fff;
-  font-weight: 400;
-  border-radius: 999px;
-  padding: 8px 20px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 9px 16px;
 }
 button.primary:hover { opacity: 0.88; }
 
-/* Ghost pill — filled dark grey, white text. Figma's "Edit board". */
-button.ghost {
-  color: var(--klar-text);
-  font-weight: 400;
-  background: #2a2a2a;
-  border-radius: 999px;
-  padding: 8px 20px;
-}
-button.ghost:hover { opacity: 0.85; }
+/* Edit board — filled dark-grey pill per Figma, not a plain ghost text
+   button. .ghost is still used bare (no .pill) in a couple of smaller
+   contexts, which keep the plain-text treatment. */
+button.ghost { color: var(--klar-text-secondary); font-weight: 400; }
+button.ghost.pill { background: #2a2a2a; color: var(--klar-text); }
 button.danger { color: var(--klar-danger); }
 
 /* ---------------------------------------------------------------------- */
@@ -285,12 +286,12 @@ button.danger { color: var(--klar-danger); }
 input, textarea {
   width: 100%;
   font: inherit;
-  font-size: 17px;
+  font-size: 13px;
   color: var(--klar-text);
   background: var(--klar-panel);
   border: none;
-  border-radius: 12px;
-  padding: 12px 16px;
+  border-radius: 8px;
+  padding: 9px 11px;
   outline: none;
 }
 input:focus-visible, textarea:focus-visible {
@@ -313,18 +314,18 @@ input.inline-edit:focus-visible { background: var(--klar-panel); }
 select {
   width: 100%;
   font: inherit;
-  font-size: 17px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--klar-text);
   background: var(--klar-panel);
   border: none;
-  border-radius: 12px;
-  padding: 12px 32px 12px 16px;
+  border-radius: 8px;
+  padding: 9px 28px 9px 11px;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%23999' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   background-repeat: no-repeat;
-  background-position: right 14px center;
+  background-position: right 10px center;
   background-size: 10px 7px;
 }
 
@@ -350,7 +351,7 @@ select {
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
-.share-label { font-size: 13px; font-weight: 600; color: var(--klar-text); margin-top: 4px; }
+.share-label { font-size: 12.5px; font-weight: 600; color: var(--klar-text); margin-top: 4px; }
 .share-label:first-child { margin-top: 0; }
 .share-field {
   display: flex;
@@ -363,11 +364,10 @@ select {
 .share-field input {
   background: none;
   padding: 6px 0;
-  font-size: 13px;
-  border-radius: 0;
+  font-size: 12px;
 }
-.share-field .ghost { flex-shrink: 0; padding: 4px 10px; font-size: 13px; background: none; border-radius: 6px; color: var(--klar-text-secondary); }
-.share-generate { flex-shrink: 0; padding: 6px 12px; font-size: 13px; }
+.share-field .ghost { flex-shrink: 0; padding: 4px 6px; }
+.share-generate { flex-shrink: 0; padding: 6px 12px; font-size: 12px; }
 
 /* ---------------------------------------------------------------------- */
 /* Rows — plain list rows, hairline separators only, no fill of any kind.
@@ -409,7 +409,7 @@ select {
   color: var(--klar-text-secondary);
   padding: 0;
 }
-.overflow-btn:hover { background: var(--klar-panel); opacity: 1; }
+.overflow-btn:hover { opacity: 0.7; }
 
 /* Context menu — a small floating popover, like a Mac/iOS action sheet. */
 .menu-backdrop {
@@ -443,51 +443,48 @@ select {
 
 /* ---------------------------------------------------------------------- */
 /* Board toolbar — Add task field (or +Add board in edit mode) + Assignee.
-   Figma: 620px-wide input at 52px tall, 12px radius, "+", sitting on the
-   same row as the assignee block. Stays fixed at the top of main-area;
-   only .board below it scrolls. Wraps at narrow widths so the Assignee
-   control is always reachable without horizontal scroll. */
+   Stays fixed at the top of main-area; only .board below it scrolls, both
+   directions, per spec. Wraps at narrow widths rather than overflowing so
+   the Assignee control is always reachable without horizontal scroll. */
 
 .board-toolbar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 20px 24px;
+  gap: 12px;
+  padding: 10px 14px;
   flex-wrap: wrap;
 }
 .add-task-field-wrap {
   position: relative;
   flex: 1;
-  min-width: 220px;
-  max-width: 620px;
+  min-width: 160px;
+  max-width: 460px;
 }
 .add-task-field {
   width: 100%;
-  height: 52px;
-  border-radius: 12px;
-  font-size: 17px;
-  padding: 12px 44px 12px 22px;
-  background: var(--klar-panel);
-  border: 1px solid var(--klar-border-soft);
+  height: 34px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  padding-right: 28px;
 }
 .add-task-plus {
   position: absolute;
-  right: 22px;
+  right: 11px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--klar-text-secondary);
-  font-size: 17px;
+  color: var(--klar-text-tertiary);
+  font-size: 13px;
   pointer-events: none;
 }
 
-/* Generic pill button — Share / +Add board use this. */
+/* Generic pill button — Share / +Add board / Edit board use this. */
 .pill {
   border-radius: 999px;
-  padding: 8px 20px;
-  font-size: 17px;
-  font-weight: 400;
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 500;
 }
 button.primary.pill { background: var(--klar-accent); color: #fff; }
 
@@ -499,23 +496,23 @@ button.primary.pill { background: var(--klar-accent); color: #fff; }
 .assignee-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 2px;
 }
-.assignee-avatar { width: 49px; height: 49px; flex-shrink: 0; }
+.assignee-avatar { width: 28px; height: 28px; flex-shrink: 0; }
 .assignee-info {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 1px;
   text-align: left;
 }
-.assignee-label { font-size: 17px; color: var(--klar-text); line-height: 1.2; }
-.assignee-name { font-size: 17px; color: var(--klar-text-secondary); line-height: 1.2; }
-.assignee-btn svg { flex-shrink: 0; color: var(--klar-text-secondary); margin-left: 2px; }
+.assignee-label { font-size: 10.5px; color: var(--klar-text); line-height: 1.2; }
+.assignee-name { font-size: 10.5px; color: var(--klar-text-tertiary); line-height: 1.2; }
+.assignee-btn svg { flex-shrink: 0; color: var(--klar-text-tertiary); margin-left: 2px; }
 
 .assignee-popover { min-width: 190px; }
-.menu-title { font-size: 13px; font-weight: 600; color: var(--klar-text); padding: 6px 10px 8px; }
+.menu-title { font-size: 12px; font-weight: 600; color: var(--klar-text); padding: 6px 10px 8px; }
 .menu-empty { padding: 4px 10px 8px; }
 .menu-divider { height: 1px; background: var(--klar-border); margin: 4px 2px; }
 .menu-item.accent { color: var(--klar-accent); }
@@ -523,30 +520,26 @@ button.primary.pill { background: var(--klar-accent); color: #fff; }
 /* ---------------------------------------------------------------------- */
 /* Kanban board — columns scroll horizontally, each column's card list
    scrolls vertically within a capped height so the toolbar row above
-   never moves. Figma's reference columns are 302px wide with 12px radius
-   panels on a #1b1b1b fill; kept at spec since the plugin panel has room
-   for 1–2 columns at a time with horizontal scroll for the rest, exactly
-   like the Figma board scrolls beyond four columns on a real monitor.
-   Card colors are fixed per-board (not theme-dependent), matching Figma
-   exactly regardless of the Framer user's light/dark setting. */
+   never moves. Card colors are fixed per-board (not theme-dependent),
+   matching the Figma spec exactly regardless of light/dark mode. */
 
 .board {
   display: flex;
   align-items: flex-start;
-  gap: 20px;
-  padding: 0 24px 24px;
+  gap: 10px;
+  padding: 0 14px 14px;
   overflow-x: auto;
   overflow-y: hidden;
 }
 .column {
-  min-width: 302px;
-  width: 302px;
+  min-width: 220px;
+  width: 220px;
   flex-shrink: 0;
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
+  gap: 8px;
+  padding: 12px;
   border-radius: 12px;
   background: var(--klar-panel);
   overflow-y: auto;
@@ -556,20 +549,20 @@ button.primary.pill { background: var(--klar-accent); color: #fff; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 24px;
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--klar-text);
   padding: 2px 2px 4px;
   flex-shrink: 0;
 }
 .col-title.editing { text-decoration: underline; text-underline-offset: 3px; }
-.count { font-weight: 400; color: var(--klar-text-secondary); font-size: 17px; }
+.count { font-weight: 400; color: var(--klar-text-tertiary); font-size: 12.5px; }
 
 .col-head-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .reorder-btn, .delete-board-btn {
   padding: 2px 4px;
   font-size: 11px;
-  color: var(--klar-text-secondary);
+  color: var(--klar-text-tertiary);
   line-height: 1;
 }
 .reorder-btn:hover, .delete-board-btn:hover { color: var(--klar-text); opacity: 1; }
@@ -605,31 +598,30 @@ button.primary.pill { background: var(--klar-accent); color: #fff; }
 
 .task-card {
   flex-shrink: 0;
-  border-radius: 7px;
-  padding: 19px 20px;
+  border-radius: 8px;
+  padding: 12px;
   cursor: grab;
   color: #000;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  min-height: 175px;
+  gap: 6px;
 }
 .task-card:active { cursor: grabbing; }
-.task-card-title { font-weight: 590; font-size: 17px; line-height: 1.3; }
-.task-card-note { font-size: 17px; line-height: 1.4; opacity: 0.85; flex: 1; }
+.task-card-title { font-weight: 600; font-size: 12.5px; line-height: 1.3; }
+.task-card-note { font-size: 11.5px; line-height: 1.4; opacity: 0.85; }
 .task-card-duration {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 15px;
+  font-size: 10.5px;
   opacity: 0.4;
   align-self: flex-end;
 }
 
 .new-board-input {
   flex-shrink: 0;
-  height: 40px;
-  font-size: 17px;
+  height: 30px;
+  font-size: 12.5px;
 }
 
 /* ---------------------------------------------------------------------- */

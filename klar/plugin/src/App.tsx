@@ -118,7 +118,7 @@ function Login() {
 
 function DotsIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
       <circle cx="3.5" cy="8" r="1.4" />
       <circle cx="8" cy="8" r="1.4" />
       <circle cx="12.5" cy="8" r="1.4" />
@@ -129,8 +129,8 @@ function DotsIcon() {
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg
-      width="12"
-      height="12"
+      width="10"
+      height="10"
       viewBox="0 0 12 12"
       fill="none"
       style={{
@@ -152,18 +152,18 @@ function ChevronIcon({ open }: { open: boolean }) {
 
 function SidebarIcon() {
   return (
-    <svg width="24" height="20" viewBox="0 0 24 20" fill="none">
-      <rect x="1.5" y="1.5" width="21" height="17" rx="3" stroke="currentColor" strokeWidth="1.4" />
-      <line x1="9" y1="1.5" x2="9" y2="18.5" stroke="currentColor" strokeWidth="1.4" />
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" />
+      <line x1="6" y1="2.5" x2="6" y2="13.5" stroke="currentColor" strokeWidth="1.3" />
     </svg>
   );
 }
 
 function SearchIcon() {
   return (
-    <svg width="19" height="19" viewBox="0 0 19 19" fill="none">
-      <circle cx="8.5" cy="8.5" r="6" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="13" y1="13" x2="17" y2="17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.4" />
+      <line x1="10.8" y1="10.8" x2="14" y2="14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -369,14 +369,17 @@ function Shell({ studio }: { studio: Studio }) {
               </button>
             </div>
 
-            {filteredClients.map((c) => (
+            {filteredClients.map((c) => {
+              const isExpanded = expanded.has(c.id);
+              const hasActiveChild = sel.clientId === c.id && !!sel.workspaceId;
+              return (
               <div key={c.id}>
                 <div
                   className={`side-row ${sel.clientId === c.id && !sel.workspaceId ? "active" : ""}`}
                 >
                   <button className="side-row-main" onClick={() => toggleExpand(c.id)}>
-                    <ChevronIcon open={expanded.has(c.id)} />
-                    <span className="ellipsis">{c.name}</span>
+                    <ChevronIcon open={isExpanded} />
+                    <span className={`ellipsis ${hasActiveChild ? "raised" : ""}`}>{c.name}</span>
                   </button>
                   <RowMenu
                     actions={[
@@ -403,7 +406,7 @@ function Shell({ studio }: { studio: Studio }) {
                   />
                 </div>
 
-                {expanded.has(c.id) && (
+                {isExpanded && (
                   <div className="side-children">
                     {(wsByClient[c.id] ?? []).map((w) =>
                       renamingWsId === w.id ? (
@@ -430,7 +433,7 @@ function Shell({ studio }: { studio: Studio }) {
                             className="side-row-main"
                             onClick={() => setSel({ clientId: c.id, workspaceId: w.id })}
                           >
-                            <span className="ellipsis">{w.name}</span>
+                            <span className={`ellipsis ${sel.workspaceId === w.id ? "raised" : ""}`}>{w.name}</span>
                           </button>
                           <RowMenu
                             actions={[
@@ -472,7 +475,8 @@ function Shell({ studio }: { studio: Studio }) {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="sidebar-foot">
@@ -505,7 +509,7 @@ function Shell({ studio }: { studio: Studio }) {
             <span className="title ellipsis muted">klar</span>
           )}
           {selWorkspace && (
-            <button className="ghost" onClick={() => setEditBoard((v) => !v)}>
+            <button className="ghost pill" onClick={() => setEditBoard((v) => !v)}>
               {editBoard ? "Save changes" : "Edit board"}
             </button>
           )}
