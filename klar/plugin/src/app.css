@@ -1,0 +1,469 @@
+/* klar plugin — sits inside Framer, so it borrows Framer's color tokens,
+   but the interaction language is deliberately iOS: text-style buttons
+   sized to their content, row separators instead of filled backgrounds,
+   and a single overflow (•••) menu per row instead of stacked buttons. */
+
+* { box-sizing: border-box; }
+
+body {
+  font-size: 13px;
+  color: var(--framer-color-text);
+  background: var(--framer-color-bg);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+/* ---------------------------------------------------------------------- */
+/* Shell: sidebar + main, Framer-panel style */
+
+.shell-root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 190px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--framer-color-divider);
+  background: var(--framer-color-bg);
+}
+.sidebar-head {
+  padding: 14px 14px 10px;
+  flex-shrink: 0;
+}
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px;
+}
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--framer-color-text-tertiary);
+  padding: 6px 6px 8px;
+}
+.sidebar-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--framer-color-divider);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.side-foot-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--framer-color-text-secondary);
+}
+.side-foot-item:hover { background: var(--framer-color-bg-secondary); opacity: 1; }
+
+/* Tree rows */
+.side-row {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  padding-right: 2px;
+}
+.side-row:hover { background: var(--framer-color-bg-secondary); }
+.side-row.active { background: var(--framer-color-bg-secondary); }
+.side-row .overflow-btn { opacity: 0; }
+.side-row:hover .overflow-btn { opacity: 1; }
+.side-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  padding: 7px 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--framer-color-text);
+}
+.side-row-main:hover { opacity: 1; }
+.side-children { margin-left: 14px; }
+.side-child-row { font-size: 12.5px; }
+.side-child-row .side-row-main { font-weight: 400; padding-left: 10px; }
+input.side-child-row { margin: 2px 0 2px 10px; width: calc(100% - 12px); }
+
+.side-add {
+  display: block;
+  text-align: left;
+  padding: 7px 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--framer-color-text-tertiary);
+}
+.side-add:hover { color: var(--framer-color-tint); opacity: 1; }
+
+.main-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.login-screen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.col { display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; }
+.fill { flex: 1; min-height: 0; }
+.gap { gap: 10px; }
+.gap-s { gap: 6px; }
+.pad { padding: 14px; }
+.pad-s { padding: 8px 14px; }
+.scroll { overflow-y: auto; flex: 1; min-height: 0; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.title { font-weight: 600; font-size: 13px; letter-spacing: -0.01em; }
+.muted { color: var(--framer-color-text-tertiary); }
+.small { font-size: 11px; }
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--framer-color-text-tertiary);
+  text-transform: uppercase;
+}
+.err { color: #ff453a; font-size: 12px; }
+
+/* ---------------------------------------------------------------------- */
+/* Top bar — like a navigation bar: leading control, centered/flex title,
+   trailing controls. Every child sizes to its content, never full width. */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--framer-color-divider);
+  flex-shrink: 0;
+}
+.bar .title { flex: 1; min-width: 0; }
+.bar select.workspace-select { flex: 1; min-width: 0; }
+
+/* ---------------------------------------------------------------------- */
+/* Buttons — iOS text-style by default: no fill, tinted text, sized to
+   content. A button never stretches to fill its row. */
+
+button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  border: none;
+  background: none;
+  color: var(--framer-color-tint);
+  cursor: pointer;
+  padding: 4px 2px;
+  white-space: nowrap;
+  width: auto;
+  flex: 0 0 auto;
+  -webkit-tap-highlight-color: transparent;
+}
+button:hover { opacity: 0.7; }
+button:active { opacity: 0.5; }
+button:disabled { opacity: 0.35; cursor: default; }
+
+/* Primary action — the one filled, pill-shaped, iOS "Continue" button.
+   Used sparingly: one per screen, for the affirmative action. */
+button.primary {
+  background: var(--framer-color-tint);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 9px 16px;
+}
+button.primary:hover { opacity: 0.88; }
+
+button.ghost { color: var(--framer-color-text-secondary); font-weight: 400; }
+button.danger { color: #ff453a; }
+
+/* ---------------------------------------------------------------------- */
+/* Inputs — plain, minimal chrome, a hairline only on focus. */
+
+input, textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  color: var(--framer-color-text);
+  background: var(--framer-color-bg-secondary);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 11px;
+  outline: none;
+}
+input:focus-visible, textarea:focus-visible {
+  box-shadow: 0 0 0 1.5px var(--framer-color-tint);
+}
+input[type="checkbox"] { width: auto; }
+textarea { resize: none; min-height: 60px; }
+
+/* Inline rename field: no visible chrome until focused, so it reads as
+   "the text became editable" rather than "a form appeared". */
+input.inline-edit {
+  background: transparent;
+  padding: 4px 6px;
+  margin: -4px -6px;
+}
+input.inline-edit:focus-visible { background: var(--framer-color-bg-secondary); }
+
+/* Native select, de-chromed to match: no background arrow artwork,
+   a small custom chevron instead, otherwise text-only like a button. */
+select {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--framer-color-text);
+  background: var(--framer-color-bg-secondary);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 28px 9px 11px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 7px;
+}
+
+.card {
+  margin: 10px 14px;
+  padding: 14px;
+  background: var(--framer-color-bg-secondary);
+  border-radius: 12px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Rows — plain list rows, hairline separators only, no fill of any kind.
+   A trailing overflow (•••) button opens the row's context menu. */
+
+.row-list { display: flex; flex-direction: column; }
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--framer-color-divider);
+}
+.list-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.list-row-main:hover { opacity: 0.7; }
+.project-name { font-weight: 500; font-size: 13px; }
+
+.overflow-btn {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--framer-color-text-secondary);
+  padding: 0;
+}
+.overflow-btn:hover { background: var(--framer-color-bg-secondary); opacity: 1; }
+
+/* Context menu — a small floating popover, like a Mac/iOS action sheet. */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+.menu-popover {
+  position: absolute;
+  z-index: 21;
+  min-width: 140px;
+  background: var(--framer-color-bg);
+  border: 1px solid var(--framer-color-divider);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  padding: 4px;
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--framer-color-text);
+  border-radius: 6px;
+}
+.menu-item:hover { background: var(--framer-color-bg-secondary); opacity: 1; }
+.menu-item.danger { color: #ff453a; }
+
+/* ---------------------------------------------------------------------- */
+/* Kanban board */
+
+.board {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  overflow-x: auto;
+}
+.column {
+  min-width: 150px;
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 8px;
+  border-right: 1px solid var(--framer-color-divider);
+}
+.column:last-child { border-right: none; }
+.col-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--framer-color-text-tertiary);
+  padding: 4px 2px;
+  position: sticky;
+  top: 0;
+  background: var(--framer-color-bg);
+}
+.count { font-weight: 400; }
+
+.task-card {
+  border-radius: 10px;
+  padding: 9px 10px;
+  cursor: grab;
+  background: var(--framer-color-bg-secondary);
+}
+.task-card:active { cursor: grabbing; }
+.task-card-title { font-weight: 500; font-size: 12.5px; line-height: 1.35; }
+
+.task-card.status-backlog     { background: color-mix(in srgb, #8a8a93 16%, var(--framer-color-bg-secondary)); }
+.task-card.status-planning    { background: color-mix(in srgb, #5e9eff 16%, var(--framer-color-bg-secondary)); }
+.task-card.status-in_progress { background: color-mix(in srgb, #f0a93b 16%, var(--framer-color-bg-secondary)); }
+.task-card.status-review      { background: color-mix(in srgb, #b076f2 16%, var(--framer-color-bg-secondary)); }
+.task-card.status-completed   { background: color-mix(in srgb, #3fb27f 16%, var(--framer-color-bg-secondary)); }
+
+/* ---------------------------------------------------------------------- */
+/* Bottom sheet */
+
+.sheet {
+  position: absolute;
+  inset: auto 0 0 0;
+  max-height: 80%;
+  overflow-y: auto;
+  background: var(--framer-color-bg);
+  border-top: 1px solid var(--framer-color-divider);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.14);
+  border-radius: 14px 14px 0 0;
+  z-index: 10;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Team panel — opened from the toolbar as its own sheet, not nested
+   inside the client-edit form. */
+
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.avatar-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--framer-color-bg-secondary);
+}
+.avatar-btn:hover { opacity: 0.85; }
+.avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--framer-color-text-secondary);
+}
+.team-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+
+/* ---------------------------------------------------------------------- */
+/* Files */
+
+.files-btn {
+  margin-top: 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--framer-color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+}
+.files-badge {
+  background: var(--framer-color-tint);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--framer-color-divider);
+}
+.file-info { flex: 1; min-width: 0; }
+.file-name {
+  font-weight: 500;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

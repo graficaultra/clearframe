@@ -1,0 +1,6 @@
+{
+  "id": "klar01",
+  "name": "klar",
+  "modes": ["canvas"],
+  "icon": "/icon.svg"
+}
