@@ -1,27 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GetFilesButton } from "@/app/get-files-button";
 
 type Workspace = { id: string; name: string };
+type Board = { id: string; name: string; color: string };
 type Task = {
   id: string;
   title: string;
-  status: string;
+  board_id: string | null;
   description: string | null;
   deadline: string | null;
   created_at: string;
-  files: { file_name: string; download_url: string | null }[];
+  updated_at: string;
 };
-
-const STATUS_LABEL: Record<string, string> = {
-  backlog: "Backlog",
-  planning: "Planning",
-  in_progress: "In progress",
-  review: "Ready for review",
-  completed: "Completed",
-};
-const STATUS_ORDER = ["backlog", "planning", "in_progress", "review", "completed"];
 
 function ClockIcon() {
   return (
@@ -36,6 +27,9 @@ function fmt(d: string | null) {
   return d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long" }) : null;
 }
 
+// Duration reflects last edit (updated_at), not creation — matches the
+// plugin side's card label exactly, so a client and the studio see the
+// same "2d" / "6h" figure for the same task.
 function fmtRelative(iso: string) {
   const hours = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60));
   if (hours < 1) return "just now";
@@ -53,6 +47,7 @@ export function WorkspaceBoard({
   initialWorkspaceId: string;
 }) {
   const [currentId, setCurrentId] = useState(initialWorkspaceId);
+  const [boards, setBoards] = useState<Board[] | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,6 +58,7 @@ export function WorkspaceBoard({
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled) {
+          setBoards(d.boards ?? []);
           setTasks(d.tasks ?? []);
           setLoading(false);
         }
@@ -87,27 +83,30 @@ export function WorkspaceBoard({
       )}
 
       <div className="client-board">
-        {STATUS_ORDER.map((status) => (
-          <div className="client-column" key={status}>
+        {(boards ?? []).map((board) => (
+          <div className="client-column" key={board.id}>
             <div className="client-col-head">
-              {STATUS_LABEL[status]}
+              {board.name}
               <span className="count">
-                {loading ? "" : tasks?.filter((t) => t.status === status).length}
+                {loading ? "" : tasks?.filter((t) => t.board_id === board.id).length}
               </span>
             </div>
             {!loading &&
               tasks
-                ?.filter((t) => t.status === status)
+                ?.filter((t) => t.board_id === board.id)
                 .map((t) => (
-                  <div className={`client-card status-${status}`} key={t.id}>
+                  <div
+                    className="client-card"
+                    key={t.id}
+                    style={{ background: board.color }}
+                  >
                     <div className="client-card-title">{t.title}</div>
                     {t.description && <div className="client-card-desc">{t.description}</div>}
                     {t.deadline && <div className="client-card-date">Due {fmt(t.deadline)}</div>}
                     <div className="client-card-footer">
                       <span className="client-card-time">
-                        <ClockIcon /> {fmtRelative(t.created_at)}
+                        <ClockIcon /> {fmtRelative(t.updated_at)}
                       </span>
-                      {t.files?.length > 0 && <GetFilesButton files={t.files} />}
                     </div>
                   </div>
                 ))}

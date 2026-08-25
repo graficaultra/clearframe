@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { db, sessionCookieName, signFileUrl, verifySession } from "@/lib/server";
+import { db, sessionCookieName, verifySession } from "@/lib/server";
 
 export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get("slug");
@@ -22,12 +22,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
 
-  const tasks = (data ?? []) as any[];
-  for (const t of tasks) {
-    for (const f of t.files ?? []) {
-      f.download_url = await signFileUrl(f.storage_path);
-    }
-  }
-
-  return NextResponse.json({ tasks });
+  // RPC returns { boards: [...], tasks: [...] } — boards drive dynamic
+  // column name/color/order (user-editable in the plugin), tasks reference
+  // board_id rather than a fixed status.
+  return NextResponse.json(data ?? { boards: [], tasks: [] });
 }

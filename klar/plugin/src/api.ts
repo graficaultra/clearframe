@@ -7,15 +7,37 @@ export const supabase = createClient(
 
 export const PORTAL_BASE = import.meta.env.VITE_PORTAL_BASE_URL as string;
 
-export type TaskStatus = "backlog" | "planning" | "in_progress" | "review" | "completed";
+// Boards are the kanban columns — user-editable per workspace (rename,
+// reorder, recolor, add, delete). DEFAULT_BOARD_COLORS is the 8-swatch
+// picker's palette; NEW_WORKSPACE_DEFAULTS seeds a fresh workspace's board
+// set client-side (server also seeds via seed_default_boards RPC, so the
+// two must stay in sync — see createWorkspace below).
+export const DEFAULT_BOARD_COLORS = [
+  "#bf9ff2", // purple
+  "#16ad70", // green
+  "#f78d2d", // orange
+  "#ea546f", // pink
+  "#32adff", // blue
+  "#f2c94c", // yellow
+  "#8e8e93", // grey
+  "#5ac8fa", // teal
+] as const;
 
-export const COLUMNS: { key: TaskStatus; label: string }[] = [
-  { key: "backlog", label: "Backlog" },
-  { key: "planning", label: "Planning" },
-  { key: "in_progress", label: "In progress" },
-  { key: "review", label: "Review" },
-  { key: "completed", label: "Completed" },
-];
+export const NEW_WORKSPACE_DEFAULTS = [
+  { name: "Backlog", color: "#bf9ff2" },
+  { name: "Planning", color: "#16ad70" },
+  { name: "In Progress", color: "#f78d2d" },
+  { name: "Review", color: "#ea546f" },
+  { name: "Completed", color: "#8e8e93" },
+] as const;
+
+export interface Board {
+  id: string;
+  project_id: string; // workspace id
+  name: string;
+  color: string; // hex
+  position: number;
+}
 
 export interface Studio {
   id: string;
@@ -38,7 +60,8 @@ export interface TeamMember {
   photo_url: string | null;
 }
 // A "workspace" is the former "project" — a container per client that owns
-// its own task board (e.g. "Website", "Rebranding").
+// its own task board (e.g. "Website", "Rebranding"). assignee_id is the one
+// team member shown/switched at the top of that workspace's board.
 export interface Workspace {
   id: string;
   studio_id: string;
@@ -46,25 +69,19 @@ export interface Workspace {
   name: string;
   slug: string;
   position: number;
+  assignee_id: string | null;
 }
 export interface Task {
   id: string;
   project_id: string; // workspace id
+  board_id: string | null;
   title: string;
   description: string | null;   // client-visible
   internal_note: string | null; // never exposed to the portal
-  status: TaskStatus;
   deadline: string | null;
   position: number;
-}
-export interface TaskFile {
-  id: string;
-  task_id: string;
-  file_name: string;
-  storage_path: string;
-  size_bytes: number;
-  content_type: string | null;
   created_at: string;
+  updated_at: string; // drives the card's "2d" / "6h" duration label
 }
 
 // --- Studio -------------------------------------------------------------
@@ -212,6 +229,15 @@ export async function createWorkspace(
     .select()
     .single();
   if (error) throw error;
+
+  // Seed the five default boards (Backlog/Planning/In Progress/Review/
+  // Completed) for this new workspace — server-side RPC keeps this atomic
+  // with the workspace row and matches NEW_WORKSPACE_DEFAULTS above.
+  const { error: seedError } = await supabase.rpc("seed_default_boards", {
+    p_project_id: data.id,
+  });
+  if (seedError) throw seedError;
+
   return data as Workspace;
 }
 
@@ -222,6 +248,63 @@ export async function updateWorkspace(id: string, patch: Partial<Workspace>): Pr
 
 export async function deleteWorkspace(id: string): Promise<void> {
   const { error } = await supabase.from("projects").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// --- Boards (kanban columns, per workspace) --------------------------------
+
+export async function listBoards(workspaceId: string): Promise<Board[]> {
+  const { data, error } = await supabase
+    .from("boards")
+    .select("*")
+    .eq("project_id", workspaceId)
+    .order("position");
+  if (error) throw error;
+  return data as Board[];
+}
+
+export async function createBoard(
+  workspaceId: string,
+  name: string,
+  color: string
+): Promise<Board> {
+  const { data: existing } = await supabase
+    .from("boards")
+    .select("position")
+    .eq("project_id", workspaceId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const nextPosition = existing ? existing.position + 1 : 0;
+
+  const { data, error } = await supabase
+    .from("boards")
+    .insert({ project_id: workspaceId, name, color, position: nextPosition })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Board;
+}
+
+export async function updateBoard(id: string, patch: Partial<Board>): Promise<void> {
+  const { error } = await supabase.from("boards").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+// Swap two boards' positions — used by the ◄► reorder controls in Edit Board
+// mode. Caller passes the two adjacent boards in their current order.
+export async function swapBoardPositions(a: Board, b: Board): Promise<void> {
+  await Promise.all([
+    supabase.from("boards").update({ position: b.position }).eq("id", a.id),
+    supabase.from("boards").update({ position: a.position }).eq("id", b.id),
+  ]);
+}
+
+export async function deleteBoard(id: string): Promise<void> {
+  // Tasks in a deleted board fall back to board_id = null (see migration's
+  // on delete set null) rather than being destroyed — they become
+  // invisible on the kanban view until reassigned, but nothing is lost.
+  const { error } = await supabase.from("boards").delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -237,10 +320,28 @@ export async function listTasks(workspaceId: string): Promise<Task[]> {
   return data as Task[];
 }
 
-export async function createTask(workspaceId: string, title: string): Promise<Task> {
+// New tasks always land in the leftmost board, on top of whatever's already
+// there (Shell's "Add task" field always targets the leftmost column,
+// regardless of which column is currently visible/scrolled-to).
+export async function createTask(
+  workspaceId: string,
+  boardId: string,
+  title: string
+): Promise<Task> {
+  const { data: existing } = await supabase
+    .from("tasks")
+    .select("position")
+    .eq("board_id", boardId)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  // Position one less than the current lowest so the new card sorts first
+  // ("on top") within its board.
+  const position = existing ? existing.position - 1 : 0;
+
   const { data, error } = await supabase
     .from("tasks")
-    .insert({ project_id: workspaceId, title, position: Date.now() })
+    .insert({ project_id: workspaceId, board_id: boardId, title, position })
     .select()
     .single();
   if (error) throw error;
@@ -273,61 +374,16 @@ export function portalUrl(slug: string): string {
   return `${PORTAL_BASE}/p/${slug}`;
 }
 
-// --- Task files ---------------------------------------------------------------
+// --- Task duration label --------------------------------------------------
+// Cards show "2d" / "6h" / "9h" — time since the task was last edited
+// (updated_at), not time since creation and not time to deadline.
 
-export const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
-
-export async function listTaskFiles(taskId: string): Promise<TaskFile[]> {
-  const { data, error } = await supabase
-    .from("task_files")
-    .select("*")
-    .eq("task_id", taskId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data as TaskFile[];
-}
-
-export async function uploadTaskFile(
-  studioId: string,
-  taskId: string,
-  file: File
-): Promise<TaskFile> {
-  if (file.size > MAX_FILE_BYTES) {
-    throw new Error("File is larger than 10MB");
-  }
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-  const path = `${studioId}/${taskId}/${crypto.randomUUID()}-${safeName}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from("project-files")
-    .upload(path, file, { cacheControl: "3600" });
-  if (uploadError) throw uploadError;
-
-  const { data, error } = await supabase
-    .from("task_files")
-    .insert({
-      task_id: taskId,
-      file_name: file.name,
-      storage_path: path,
-      size_bytes: file.size,
-      content_type: file.type || null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as TaskFile;
-}
-
-export async function deleteTaskFile(file: TaskFile): Promise<void> {
-  await supabase.storage.from("project-files").remove([file.storage_path]);
-  const { error } = await supabase.from("task_files").delete().eq("id", file.id);
-  if (error) throw error;
-}
-
-export async function downloadTaskFile(file: TaskFile): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from("project-files")
-    .createSignedUrl(file.storage_path, 300);
-  if (error) throw error;
-  return data.signedUrl;
+export function formatDuration(updatedAt: string): string {
+  const ms = Date.now() - new Date(updatedAt).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${Math.max(mins, 1)}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
 }

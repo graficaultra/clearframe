@@ -2,38 +2,39 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { framer } from "@framer/plugin";
 import type { Session } from "@supabase/supabase-js";
 import {
-  COLUMNS,
+  Board,
   Client,
+  DEFAULT_BOARD_COLORS,
   Task,
-  TaskFile,
-  TaskStatus,
   TeamMember,
   Studio,
   Workspace,
+  createBoard,
   createClientRecord,
   createTask,
   createTeamMember,
   createWorkspace,
+  deleteBoard,
   deleteClient,
   deleteTask,
-  deleteTaskFile,
   deleteTeamMember,
   deleteWorkspace,
-  downloadTaskFile,
+  formatDuration,
   generateAccessCode,
   getOrCreateStudio,
+  listBoards,
   listClients,
-  listTaskFiles,
   listTasks,
   listTeamMembers,
   listWorkspacesForClient,
   portalUrl,
   supabase,
+  swapBoardPositions,
+  updateBoard,
   updateClient,
   updateTask,
   updateWorkspace,
   uploadAvatar,
-  uploadTaskFile,
 } from "./api";
 
 export function App() {
@@ -158,6 +159,15 @@ function SidebarIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.4" />
+      <line x1="10.8" y1="10.8" x2="14" y2="14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Row context menu (••• button + popover)
 
@@ -165,10 +175,16 @@ interface MenuAction {
   label: string;
   onSelect: () => void;
   danger?: boolean;
+  // Danger actions require a second confirming click before onSelect runs —
+  // the popover row itself becomes the confirm step (label swaps to
+  // confirmLabel) rather than opening a separate dialog, matching the
+  // Figma "Delete" row's compact footprint.
+  confirmLabel?: string;
 }
 
 function RowMenu({ actions }: { actions: MenuAction[] }) {
   const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
@@ -176,6 +192,7 @@ function RowMenu({ actions }: { actions: MenuAction[] }) {
     e.stopPropagation();
     const r = btnRef.current?.getBoundingClientRect();
     if (r) setPos({ top: r.bottom + 4, left: Math.max(8, r.right - 150) });
+    setConfirming(null);
     setOpen(true);
   }
 
@@ -188,18 +205,26 @@ function RowMenu({ actions }: { actions: MenuAction[] }) {
         <>
           <div className="menu-backdrop" onClick={() => setOpen(false)} />
           <div className="menu-popover" style={{ top: pos.top, left: pos.left }}>
-            {actions.map((a) => (
-              <button
-                key={a.label}
-                className={`menu-item ${a.danger ? "danger" : ""}`}
-                onClick={() => {
-                  setOpen(false);
-                  a.onSelect();
-                }}
-              >
-                {a.label}
-              </button>
-            ))}
+            {actions.map((a) => {
+              const isConfirming = a.danger && confirming === a.label;
+              return (
+                <button
+                  key={a.label}
+                  className={`menu-item ${a.danger ? "danger" : ""}`}
+                  onClick={() => {
+                    if (a.danger && !isConfirming) {
+                      setConfirming(a.label);
+                      return;
+                    }
+                    setOpen(false);
+                    setConfirming(null);
+                    a.onSelect();
+                  }}
+                >
+                  {isConfirming ? a.confirmLabel ?? "Confirm delete?" : a.label}
+                </button>
+              );
+            })}
           </div>
         </>
       )}
@@ -261,7 +286,7 @@ function Shell({ studio }: { studio: Studio }) {
   const [sel, setSel] = useState<Selection>({ clientId: null, workspaceId: null });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showTeam, setShowTeam] = useState(false);
-  const [share, setShare] = useState(false);
+  const [editBoard, setEditBoard] = useState(false);
 
   // Creation / editing state
   const [creatingClient, setCreatingClient] = useState(false);
@@ -304,6 +329,17 @@ function Shell({ studio }: { studio: Studio }) {
     setRenamingWsId(null);
   }
 
+  const [search, setSearch] = useState("");
+  const filteredClients = useMemo(() => {
+    if (!search.trim()) return clients;
+    const q = search.trim().toLowerCase();
+    return clients.filter((c) => {
+      if (c.name.toLowerCase().includes(q)) return true;
+      const ws = wsByClient[c.id] ?? [];
+      return ws.some((w) => w.name.toLowerCase().includes(q));
+    });
+  }, [clients, wsByClient, search]);
+
   const selClient = clients.find((c) => c.id === sel.clientId) ?? null;
   const selWorkspace =
     (sel.clientId && wsByClient[sel.clientId]?.find((w) => w.id === sel.workspaceId)) || null;
@@ -316,10 +352,24 @@ function Shell({ studio }: { studio: Studio }) {
             <span className="title ellipsis">{studio.name}</span>
           </div>
 
-          <div className="sidebar-scroll">
-            <div className="sidebar-section-label">Clients</div>
+          <label className="sidebar-search">
+            <SearchIcon />
+            <input
+              placeholder="Search task"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
 
-            {clients.map((c) => (
+          <div className="sidebar-scroll">
+            <div className="sidebar-section-label-row">
+              <span className="sidebar-section-label">Clients</span>
+              <button className="side-add" onClick={() => setCreatingClient(true)}>
+                + Add client
+              </button>
+            </div>
+
+            {filteredClients.map((c) => (
               <div key={c.id}>
                 <div
                   className={`side-row ${sel.clientId === c.id && !sel.workspaceId ? "active" : ""}`}
@@ -342,6 +392,7 @@ function Shell({ studio }: { studio: Studio }) {
                       {
                         label: "Delete",
                         danger: true,
+                        confirmLabel: "Confirm delete?",
                         onSelect: async () => {
                           await deleteClient(c.id);
                           if (sel.clientId === c.id) setSel({ clientId: null, workspaceId: null });
@@ -393,6 +444,7 @@ function Shell({ studio }: { studio: Studio }) {
                               {
                                 label: "Delete",
                                 danger: true,
+                                confirmLabel: "Confirm delete?",
                                 onSelect: async () => {
                                   await deleteWorkspace(w.id);
                                   if (sel.workspaceId === w.id)
@@ -421,15 +473,12 @@ function Shell({ studio }: { studio: Studio }) {
                 )}
               </div>
             ))}
-
-            <button className="side-add" onClick={() => setCreatingClient(true)}>
-              + New client
-            </button>
           </div>
 
           <div className="sidebar-foot">
+            <div className="sidebar-foot-label">Settings</div>
             <button className="side-foot-item" onClick={() => setShowTeam(true)}>
-              Manage team
+              Manage Team
             </button>
             <button className="side-foot-item" onClick={() => supabase.auth.signOut()}>
               Log out
@@ -455,19 +504,36 @@ function Shell({ studio }: { studio: Studio }) {
           ) : (
             <span className="title ellipsis muted">klar</span>
           )}
-          {selClient && (
-            <button className="ghost" onClick={() => setShare(!share)}>
-              Share
+          {selWorkspace && (
+            <button className="ghost" onClick={() => setEditBoard((v) => !v)}>
+              {editBoard ? "Save changes" : "Edit board"}
             </button>
+          )}
+          {selClient && (
+            <ShareTrigger client={selClient} workspaces={wsByClient[selClient.id] ?? []} />
           )}
         </div>
 
-        {share && selClient && (
-          <SharePanel client={selClient} workspaces={wsByClient[selClient.id] ?? []} />
-        )}
-
         {selWorkspace ? (
-          <TaskBoard key={selWorkspace.id} workspace={selWorkspace} studioId={studio.id} />
+          <TaskBoard
+            key={selWorkspace.id}
+            workspace={selWorkspace}
+            team={team}
+            editMode={editBoard}
+            onManageTeam={() => setShowTeam(true)}
+            onWorkspaceChange={(patch) => {
+              setWsByClient((m) => {
+                if (!selWorkspace) return m;
+                const list = m[selWorkspace.client_id] ?? [];
+                return {
+                  ...m,
+                  [selWorkspace.client_id]: list.map((w) =>
+                    w.id === selWorkspace.id ? { ...w, ...patch } : w
+                  ),
+                };
+              });
+            }}
+          />
         ) : (
           <div className="empty-state">
             <div className="muted">
@@ -610,102 +676,188 @@ function ClientForm({
 
 // ---------------------------------------------------------------------------
 
-function TaskBoard({ workspace, studioId }: { workspace: Workspace; studioId: string }) {
+function TaskBoard({
+  workspace,
+  team,
+  editMode,
+  onWorkspaceChange,
+  onManageTeam,
+}: {
+  workspace: Workspace;
+  team: TeamMember[];
+  editMode: boolean;
+  onWorkspaceChange: (patch: Partial<Workspace>) => void;
+  onManageTeam: () => void;
+}) {
+  const [boards, setBoards] = useState<Board[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTitle, setNewTitle] = useState("");
   const [selected, setSelected] = useState<Task | null>(null);
-  const [filesFor, setFilesFor] = useState<Task | null>(null);
-  const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
+  const [addingBoard, setAddingBoard] = useState(false);
 
-  const refresh = () =>
-    listTasks(workspace.id).then(async (ts) => {
-      setTasks(ts);
-      const counts: Record<string, number> = {};
-      await Promise.all(
-        ts.map(async (t) => {
-          counts[t.id] = (await listTaskFiles(t.id)).length;
-        })
-      );
-      setFileCounts(counts);
-    });
+  const refreshBoards = () => listBoards(workspace.id).then(setBoards);
+  const refreshTasks = () => listTasks(workspace.id).then(setTasks);
   useEffect(() => {
-    refresh();
+    refreshBoards();
+    refreshTasks();
   }, [workspace.id]);
 
-  const byStatus = useMemo(() => {
-    const m: Record<TaskStatus, Task[]> = {
-      backlog: [],
-      planning: [],
-      in_progress: [],
-      review: [],
-      completed: [],
-    };
-    tasks.forEach((t) => m[t.status].push(t));
+  const byBoard = useMemo(() => {
+    const m: Record<string, Task[]> = {};
+    boards.forEach((b) => (m[b.id] = []));
+    tasks.forEach((t) => {
+      if (t.board_id && m[t.board_id]) m[t.board_id].push(t);
+    });
     return m;
-  }, [tasks]);
+  }, [boards, tasks]);
 
-  async function move(taskId: string, status: TaskStatus) {
-    setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, status } : t)));
-    await updateTask(taskId, { status, position: Date.now() });
-    refresh();
+  const leftmostBoard = boards[0];
+
+  async function move(taskId: string, boardId: string) {
+    setTasks((ts) => ts.map((t) => (t.id === taskId ? { ...t, board_id: boardId } : t)));
+    await updateTask(taskId, { board_id: boardId });
+    refreshTasks();
+  }
+
+  async function addTask() {
+    if (!newTitle.trim() || !leftmostBoard) return;
+    await createTask(workspace.id, leftmostBoard.id, newTitle.trim());
+    setNewTitle("");
+    refreshTasks();
   }
 
   return (
     <div className="col fill">
-      <div className="row pad-s gap-s">
-        <input
-          placeholder="Add a task"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          onKeyDown={async (e) => {
-            if (e.key === "Enter" && newTitle.trim()) {
-              await createTask(workspace.id, newTitle.trim());
-              setNewTitle("");
-              refresh();
-            }
+      <div className="board-toolbar">
+        {editMode ? (
+          <button className="pill primary" disabled={addingBoard} onClick={() => setAddingBoard(true)}>
+            + Add board
+          </button>
+        ) : (
+          <input
+            className="add-task-field"
+            placeholder="Add task"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addTask()}
+          />
+        )}
+        <AssigneeSwitcher
+          workspace={workspace}
+          team={team}
+          onManageTeam={onManageTeam}
+          onChange={(id) => {
+            updateWorkspace(workspace.id, { assignee_id: id });
+            onWorkspaceChange({ assignee_id: id });
           }}
         />
       </div>
 
       <div className="board scroll">
-        {COLUMNS.map((col) => (
+        {boards.map((b, i) => (
           <div
-            key={col.key}
+            key={b.id}
             className="column"
-            onDragOver={(e) => e.preventDefault()}
+            onDragOver={(e) => editMode || e.preventDefault()}
             onDrop={(e) => {
+              if (editMode) return;
               const id = e.dataTransfer.getData("text/task");
-              if (id) move(id, col.key);
+              if (id) move(id, b.id);
             }}
           >
             <div className="col-head">
-              {col.label}
-              <span className="count">{byStatus[col.key].length}</span>
+              <span className={editMode ? "col-title editing" : "col-title"}>{b.name}</span>
+              {!editMode && <span className="count">{byBoard[b.id]?.length ?? 0}</span>}
+              {editMode && (
+                <div className="col-head-actions">
+                  <button
+                    className="reorder-btn"
+                    disabled={i === 0}
+                    onClick={async () => {
+                      await swapBoardPositions(boards[i - 1], b);
+                      refreshBoards();
+                    }}
+                    aria-label="Move left"
+                  >
+                    ◄
+                  </button>
+                  <button
+                    className="reorder-btn"
+                    disabled={i === boards.length - 1}
+                    onClick={async () => {
+                      await swapBoardPositions(b, boards[i + 1]);
+                      refreshBoards();
+                    }}
+                    aria-label="Move right"
+                  >
+                    ►
+                  </button>
+                  <RowMenu
+                    actions={[
+                      {
+                        label: "Delete",
+                        danger: true,
+                        confirmLabel: "Confirm delete?",
+                        onSelect: async () => {
+                          await deleteBoard(b.id);
+                          refreshBoards();
+                          refreshTasks();
+                        },
+                      },
+                    ]}
+                  />
+                </div>
+              )}
             </div>
-            {byStatus[col.key].map((t) => (
+
+            {editMode && (
+              <div className="swatch-row">
+                {DEFAULT_BOARD_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    className={`swatch ${b.color === c ? "selected" : ""}`}
+                    style={{ background: c }}
+                    onClick={async () => {
+                      await updateBoard(b.id, { color: c });
+                      refreshBoards();
+                    }}
+                    aria-label={`Set color ${c}`}
+                  />
+                ))}
+              </div>
+            )}
+
+            {byBoard[b.id]?.map((t) => (
               <div
                 key={t.id}
-                className={`task-card status-${col.key}`}
-                draggable
+                className="task-card"
+                style={{
+                  background: editMode ? `${b.color}33` : b.color,
+                  opacity: editMode ? 0.7 : 1,
+                }}
+                draggable={!editMode}
                 onDragStart={(e) => e.dataTransfer.setData("text/task", t.id)}
-                onClick={() => setSelected(t)}
+                onClick={() => !editMode && setSelected(t)}
               >
                 <div className="task-card-title">{t.title}</div>
-                {t.deadline && <div className="muted small">{t.deadline}</div>}
-                <button
-                  className="files-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFilesFor(t);
-                  }}
-                >
-                  Files
-                  {fileCounts[t.id] > 0 && (
-                    <span className="files-badge">{fileCounts[t.id]}</span>
-                  )}
-                </button>
+                {t.description && <div className="task-card-note">{t.description}</div>}
+                <div className="task-card-duration">
+                  <ClockIcon />
+                  {formatDuration(t.updated_at)}
+                </div>
               </div>
             ))}
+
+            {editMode && addingBoard && i === boards.length - 1 && (
+              <NewBoardInline
+                onCancel={() => setAddingBoard(false)}
+                onCreate={async (name) => {
+                  await createBoard(workspace.id, name, DEFAULT_BOARD_COLORS[0]);
+                  setAddingBoard(false);
+                  refreshBoards();
+                }}
+              />
+            )}
           </div>
         ))}
       </div>
@@ -715,22 +867,134 @@ function TaskBoard({ workspace, studioId }: { workspace: Workspace; studioId: st
           task={selected}
           onClose={() => {
             setSelected(null);
-            refresh();
-          }}
-        />
-      )}
-
-      {filesFor && (
-        <FilesPanel
-          studioId={studioId}
-          task={filesFor}
-          onClose={() => {
-            setFilesFor(null);
-            refresh();
+            refreshTasks();
           }}
         />
       )}
     </div>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6.2" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M8 4.5V8l2.8 1.6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function NewBoardInline({
+  onCreate,
+  onCancel,
+}: {
+  onCreate: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  return (
+    <input
+      className="inline-edit new-board-input"
+      placeholder="Board name"
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      autoFocus
+      onBlur={() => (name.trim() ? onCreate(name.trim()) : onCancel())}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && name.trim()) onCreate(name.trim());
+        if (e.key === "Escape") onCancel();
+      }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Assignee — one team member per workspace, shown top-right of the board
+// with a photo + name, switchable via an anchored popover (same visual
+// language as RowMenu, listing all team members + a "Manage Team" shortcut).
+
+function AssigneeSwitcher({
+  workspace,
+  team,
+  onChange,
+  onManageTeam,
+}: {
+  workspace: Workspace;
+  team: TeamMember[];
+  onChange: (memberId: string | null) => void;
+  onManageTeam: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0 });
+  const current = team.find((m) => m.id === workspace.assignee_id) ?? null;
+
+  function openMenu() {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos(popoverPosition(r, 190));
+    setOpen(true);
+  }
+
+  return (
+    <div className="assignee-switcher">
+      <button ref={btnRef} className="assignee-btn" onClick={openMenu}>
+        <span className="avatar-btn assignee-avatar">
+          {current?.photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={current.photo_url} alt={current.name} className="avatar-img" />
+          ) : (
+            <span className="avatar-placeholder">
+              {current ? current.name.charAt(0).toUpperCase() : "?"}
+            </span>
+          )}
+        </span>
+        <span className="assignee-info">
+          <span className="assignee-label">Assigned to</span>
+          <span className="assignee-name">{current ? current.name : "Unassigned"}</span>
+        </span>
+        <ChevronDownIcon />
+      </button>
+
+      {open && (
+        <>
+          <div className="menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="menu-popover assignee-popover" style={pos}>
+            <div className="menu-title">Select team member</div>
+            {team.length === 0 && <div className="muted small menu-empty">No team members yet.</div>}
+            {team.map((m) => (
+              <button
+                key={m.id}
+                className="menu-item"
+                onClick={() => {
+                  onChange(m.id);
+                  setOpen(false);
+                }}
+              >
+                {m.name}
+              </button>
+            ))}
+            <div className="menu-divider" />
+            <button
+              className="menu-item accent"
+              onClick={() => {
+                setOpen(false);
+                onManageTeam();
+              }}
+            >
+              Manage Team ›
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg width="9" height="6" viewBox="0 0 10 6" fill="none">
+      <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -792,62 +1056,105 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
 
 // ---------------------------------------------------------------------------
 
-function SharePanel({ client, workspaces }: { client: Client; workspaces: Workspace[] }) {
+// Popovers anchor on their trigger and flip left/right depending on
+// available space, so a modal opened near the right edge (like Share,
+// which sits at the far right of the nav bar) always stays fully visible.
+function popoverPosition(
+  triggerRect: DOMRect,
+  panelWidth: number
+): { top: number; left?: number; right?: number } {
+  const spaceRight = window.innerWidth - triggerRect.right;
+  const top = triggerRect.bottom + 6;
+  if (spaceRight >= panelWidth + 12) {
+    return { top, right: Math.max(8, window.innerWidth - triggerRect.right) };
+  }
+  return { top, left: Math.max(8, triggerRect.left - panelWidth + triggerRect.width) };
+}
+
+function ShareTrigger({ client, workspaces }: { client: Client; workspaces: Workspace[] }) {
+  const [open, setOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number }>({ top: 0 });
+
   const anchor = workspaces[0];
   const url = anchor ? portalUrl(anchor.slug) : null;
 
-  if (!anchor) {
-    return (
-      <div className="pad col gap card">
-        <div className="muted small">Add at least one workspace before sharing.</div>
-      </div>
-    );
+  function openPanel() {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos(popoverPosition(r, 395));
+    setCode(null);
+    setOpen(true);
   }
 
   return (
-    <div className="pad col gap card">
-      <div className="label">Client portal</div>
-      <div className="row gap-s">
-        <input readOnly value={url!} onFocus={(e) => e.target.select()} />
-        <button
-          className="ghost"
-          onClick={() => {
-            navigator.clipboard.writeText(url!);
-            framer.notify("Portal link copied");
-          }}
-        >
-          Copy
-        </button>
-      </div>
-      {code ? (
-        <div className="row gap-s">
-          <input readOnly value={code} onFocus={(e) => e.target.select()} />
-          <button
-            className="ghost"
-            onClick={() => {
-              navigator.clipboard.writeText(code);
-              framer.notify("Access code copied — it won't be shown again");
-            }}
-          >
-            Copy
-          </button>
-        </div>
-      ) : (
-        <button
-          className="primary"
-          onClick={async () => setCode(await generateAccessCode(anchor.id))}
-        >
-          Generate access code
-        </button>
-      )}
-      <div className="muted small">
-        Generating a new code revokes the previous one. The code is shown once.
-      </div>
-      <button className="ghost" onClick={() => window.open(url!, "_blank")}>
-        Preview what the client sees
+    <>
+      <button ref={btnRef} className="primary pill" onClick={openPanel}>
+        Share
       </button>
-    </div>
+      {open && (
+        <>
+          <div className="menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="share-popover" style={pos}>
+            {!anchor ? (
+              <div className="muted small">Add at least one workspace before sharing.</div>
+            ) : (
+              <>
+                <div className="share-label">Client portal</div>
+                <div className="share-field">
+                  <input readOnly value={url!} onFocus={(e) => e.target.select()} />
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText(url!);
+                      framer.notify("Portal link copied");
+                    }}
+                  >
+                    <CopyIcon />
+                  </button>
+                </div>
+
+                <div className="share-label">Access code</div>
+                {code ? (
+                  <div className="share-field">
+                    <input readOnly value={code} onFocus={(e) => e.target.select()} />
+                    <button
+                      className="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(code);
+                        framer.notify("Access code copied — it won't be shown again");
+                      }}
+                    >
+                      <CopyIcon />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="share-field">
+                    <input readOnly value="" placeholder="" />
+                    <button
+                      className="primary pill share-generate"
+                      onClick={async () => setCode(await generateAccessCode(anchor.id))}
+                    >
+                      Generate
+                    </button>
+                  </div>
+                )}
+                <div className="muted small">Generating a new code revokes the previous one.</div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M3 10V3.5A1.5 1.5 0 0 1 4.5 2H10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -954,100 +1261,6 @@ function TeamPanel({
           Add
         </button>
       </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function FilesPanel({
-  studioId,
-  task,
-  onClose,
-}: {
-  studioId: string;
-  task: Task;
-  onClose: () => void;
-}) {
-  const [files, setFiles] = useState<TaskFile[]>([]);
-  const [busy, setBusy] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const refresh = () => listTaskFiles(task.id).then(setFiles);
-  useEffect(() => {
-    refresh();
-  }, [task.id]);
-
-  async function handleUpload(file: File | undefined) {
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      framer.notify("Files must be 10MB or smaller");
-      return;
-    }
-    setBusy(true);
-    try {
-      await uploadTaskFile(studioId, task.id, file);
-      refresh();
-    } catch (e) {
-      framer.notify("Upload failed — try again");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="sheet col gap pad">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <span className="title">{task.title} — Files</span>
-        <button className="ghost" onClick={onClose}>
-          Close
-        </button>
-      </div>
-
-      {files.length === 0 && <div className="muted small">No files yet.</div>}
-
-      {files.map((f) => (
-        <div key={f.id} className="file-row">
-          <div className="file-info">
-            <div className="file-name">{f.file_name}</div>
-            <div className="muted small">{formatBytes(f.size_bytes)}</div>
-          </div>
-          <button
-            className="ghost"
-            onClick={async () => {
-              const url = await downloadTaskFile(f);
-              window.open(url, "_blank");
-            }}
-          >
-            Download
-          </button>
-          <button
-            className="ghost danger"
-            onClick={async () => {
-              await deleteTaskFile(f);
-              refresh();
-            }}
-          >
-            Delete
-          </button>
-        </div>
-      ))}
-
-      <input
-        ref={inputRef}
-        type="file"
-        style={{ display: "none" }}
-        onChange={(e) => handleUpload(e.target.files?.[0])}
-      />
-      <button className="primary" disabled={busy} onClick={() => inputRef.current?.click()}>
-        {busy ? "Uploading…" : "Upload file (max 10MB)"}
-      </button>
     </div>
   );
 }
