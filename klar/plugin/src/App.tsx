@@ -372,13 +372,22 @@ function Shell({ studio }: { studio: Studio }) {
             {filteredClients.map((c) => {
               const isExpanded = expanded.has(c.id);
               const hasActiveChild = sel.clientId === c.id && !!sel.workspaceId;
+              // Chevron is only drawn once we know the client actually has
+              // workspaces (Figma shows none for empty clients) — but the
+              // 12px slot stays reserved either way so every client label
+              // keeps the same left edge. The ••• menu is always available,
+              // including for clients with no workspaces.
+              const loadedWs = wsByClient[c.id];
+              const showChevron = loadedWs === undefined || loadedWs.length > 0;
               return (
               <div key={c.id}>
                 <div
                   className={`side-row ${sel.clientId === c.id && !sel.workspaceId ? "active" : ""}`}
                 >
                   <button className="side-row-main" onClick={() => toggleExpand(c.id)}>
-                    <ChevronIcon open={isExpanded} />
+                    <span className="side-chevron">
+                      {showChevron && <ChevronIcon open={isExpanded} />}
+                    </span>
                     <span className={`ellipsis ${hasActiveChild ? "raised" : ""}`}>{c.name}</span>
                   </button>
                   <RowMenu

@@ -1,11 +1,10 @@
-/* klar plugin — fixed dark theme matching the Figma spec exactly
-   (colors, radii, pill shapes), sized down proportionally to fit
-   Framer's narrow plugin panel. The interaction language stays iOS:
-   text-style buttons sized to their content, row separators instead of
-   filled backgrounds, and a single overflow (•••) menu per row instead
-   of stacked buttons — everything except color now routes through
-   these fixed tokens instead of Framer's own theme, since the product
-   has one look (dark) regardless of the Framer user's panel theme. */
+/* klar plugin — one fixed design system, defined entirely here.
+   Framer's own framer.css is intentionally NOT imported (see main.tsx):
+   it paints bare input/button/body elements via --framer-color-* vars,
+   which resolve to Framer's greys (#1f1f1f etc.) in dark mode and leak
+   underneath these rules. Everything below is the Figma spec — colors,
+   radii and shape language exact, absolute px scaled down for the
+   narrower plugin panel. */
 
 :root {
   --klar-bg: #0f0f0f;
@@ -17,19 +16,38 @@
   --klar-text-tertiary: #666666;
   --klar-accent: #0099ff;
   --klar-danger: #ff453a;
+  --klar-font: -apple-system, "SF Pro Text", "SF Pro Display", BlinkMacSystemFont,
+    system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
-* { box-sizing: border-box; }
+/* Base reset — replaces what framer.css used to provide. */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; max-width: 100%; overflow-x: hidden; }
 
 body {
+  font-family: var(--klar-font);
   font-size: 13px;
+  line-height: 1.4;
+  font-weight: 400;
   color: var(--klar-text);
   background: var(--klar-bg);
+  color-scheme: dark;
   user-select: none;
+  font-synthesis: none;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-#root { height: 100vh; display: flex; flex-direction: column; position: relative; }
+*::selection {
+  background-color: rgba(0, 153, 255, 0.25);
+  color: var(--klar-text);
+}
+
+img, picture, video, canvas, svg { display: block; }
+
+#root { display: flex; flex-direction: column; position: relative; }
 
 /* ---------------------------------------------------------------------- */
 /* Shell: sidebar + main, Framer-panel style */
@@ -53,15 +71,17 @@ body {
   border-right: 1px solid var(--klar-border);
   background: var(--klar-bg);
 }
+/* Header — Figma has NO bottom divider here, only the sidebar's own
+   right border. Text sits flush-left on the same 16px gutter the rest
+   of the sidebar uses. */
 .sidebar-head {
   height: 52px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   padding: 0 16px;
-  border-bottom: 1px solid var(--klar-border);
 }
-.sidebar-head .title { font-size: 13px; }
+.sidebar-head .title { font-size: 13px; text-align: left; }
 
 .sidebar-search {
   flex-shrink: 0;
@@ -104,10 +124,11 @@ body {
   color: var(--klar-text);
   text-align: left;
 }
+/* Settings block — no divider above it in Figma either; it's just the
+   label plus two text rows pinned to the bottom of the sidebar. */
 .sidebar-foot {
   flex-shrink: 0;
-  border-top: 1px solid var(--klar-border);
-  padding: 12px;
+  padding: 12px 10px 16px;
   display: flex;
   flex-direction: column;
 }
@@ -117,7 +138,7 @@ body {
   color: var(--klar-text);
   text-align: left;
   padding: 6px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .side-foot-item {
   display: block;
@@ -130,10 +151,12 @@ body {
 .side-foot-item:hover { opacity: 0.7; }
 
 /* Tree rows — plain text on transparent background for clients, always;
-   no pill or brightness change based on expand/collapse state. The one
-   exception is the selected workspace row, which gets Figma's dark pill
-   (.active) — and both that row and its parent client render in white
-   text via .raised, everything else stays grey. */
+   no pill, no hover fill, no brightness change from expand/collapse.
+   The one filled background is the selected row's #1b1b1b pill.
+   Text is left-aligned and, critically, always starts at the SAME x
+   whether or not the row has a chevron — the chevron lives in a fixed
+   12px slot that stays reserved when empty (Figma: client text is at
+   left:52 regardless, chevron sits outside it at left:36.5). */
 .side-row {
   display: flex;
   align-items: center;
@@ -149,19 +172,30 @@ body {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   text-align: left;
-  padding: 6px;
+  justify-content: flex-start;
+  padding: 6px 6px 6px 8px;
   font-size: 12.5px;
   font-weight: 400;
   color: var(--klar-text-tertiary);
+}
+/* Fixed chevron slot — keeps every client label on the same left edge
+   even when the client has no workspaces and no chevron is drawn. */
+.side-chevron {
+  flex: 0 0 12px;
+  width: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .side-row-main .raised { color: var(--klar-text); }
 .side-row.active .side-row-main { color: var(--klar-text); }
 .side-row-main:hover { opacity: 0.85; }
 .side-children { margin-left: 0; }
-.side-child-row .side-row-main { padding-left: 20px; }
-input.side-child-row { margin: 1px 0; padding-left: 20px; width: 100%; }
+/* Nested workspace rows indent to Figma's left:75 (vs client left:52). */
+.side-child-row .side-row-main { padding-left: 32px; }
+input.side-child-row { margin: 1px 0; padding-left: 32px; width: 100%; }
 
 .side-add {
   display: block;
